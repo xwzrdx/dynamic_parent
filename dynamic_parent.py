@@ -22,12 +22,12 @@ import bpy
 
 
 bl_info = {
-    "name": "Dynamic Parent",
-    "author": "Roman Volodin, roman.volodin@gmail.com",
+    "name": "Dynamic Parent (Blender 5.0)",
+    "author": "Roman Volodin, roman.volodin@gmail.com | wzrd",
     "version": (2, 0, 3),
-    "blender": (4, 0, 0),
+    "blender": (5, 0, 0),
     "location": "View3D > Tool Panel",
-    "description": "Allows to create and disable an animated ChildOf constraint",
+    "description": "Allows to create and disable an animated Child Of constraint.",
     "category": "Animation",
 }
 
