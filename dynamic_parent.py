@@ -24,7 +24,7 @@ import bpy
 bl_info = {
     "name": "Dynamic Parent",
     "author": "Roman Volodin, roman.volodin@gmail.com",
-    "version": (2, 0, 2),
+    "version": (2, 0, 3),
     "blender": (4, 0, 0),
     "location": "View3D > Tool Panel",
     "description": "Allows to create and disable an animated ChildOf constraint",
@@ -96,7 +96,7 @@ def dp_keyframe_insert_pbone(arm, pbone):
         )
     elif pbone.rotation_mode == "AXIS_ANGLE":
         arm.keyframe_insert(
-            data_path='pose.bones["' + pbone.name + '"].rotation_axis_angel'
+            data_path='pose.bones["' + pbone.name + '"].rotation_axis_angle'
         )
     else:
         arm.keyframe_insert(data_path='pose.bones["' + pbone.name + '"].rotation_euler')
@@ -164,9 +164,16 @@ def dp_create_dynamic_parent_pbone(op):
             list_selected_obj.pop(i)
             parent_obj = list_selected_obj[0]
             if parent_obj.type == "ARMATURE":
+                # In Blender 5.0+ Bone.select was removed.
+                # We only need an active bone on the parent armature,
+                # so just ensure that one is set instead of checking
+                # its (now missing) selection flag.
                 parent_obj_pbone = parent_obj.data.bones.active
-                if not parent_obj_pbone.select:
-                    op.report({"ERROR"}, "At least two bones must be selected")
+                if parent_obj_pbone is None:
+                    op.report(
+                        {"ERROR"},
+                        "Select a parent bone in the other armature",
+                    )
                     return
         else:
             parent_obj = arm
@@ -240,9 +247,27 @@ def disable_constraint(obj, const, frame):
 
 
 def dp_clear(obj, pbone):
+    """Remove all Dynamic Parent constraints and their animation keys."""
+    # Safely handle objects without animation data
+    anim = getattr(obj, "animation_data", None)
+    action = getattr(anim, "action", None) if anim else None
+
+    # Helper: remove DP_ constraints from either the pose bone or object
+    def _remove_constraints(target):
+        if target is None:
+            return
+        for const in list(target.constraints):
+            if const.name.startswith("DP_"):
+                target.constraints.remove(const)
+
+    if not action:
+        # No keyframes to clean up, just remove constraints.
+        _remove_constraints(pbone or obj)
+        return
+
     dp_curves = []
     dp_keys = []
-    for fcurve in obj.animation_data.action.fcurves:
+    for fcurve in action.fcurves:
         if "constraints" in fcurve.data_path and "DP_" in fcurve.data_path:
             dp_curves.append(fcurve)
 
@@ -253,16 +278,16 @@ def dp_clear(obj, pbone):
     dp_keys = list(set(dp_keys))
     dp_keys.sort()
 
-    for fcurve in obj.animation_data.action.fcurves[:]:
+    for fcurve in action.fcurves[:]:
         if fcurve.data_path.startswith("constraints") and "DP_" in fcurve.data_path:
-            obj.animation_data.action.fcurves.remove(fcurve)
+            action.fcurves.remove(fcurve)
         else:
             for frame in dp_keys:
                 for key in fcurve.keyframe_points[:]:
                     if key.co[0] == frame:
                         fcurve.keyframe_points.remove(key)
             if not fcurve.keyframe_points:
-                obj.animation_data.action.fcurves.remove(fcurve)
+                action.fcurves.remove(fcurve)
 
     if pbone:
         obj = pbone
